@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import MainLayout from "@/components/layout/main-layout";
-import { ArrowDownLeft, ArrowUpRight, Filter, Plus, Trash2, Calendar } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Store, { Payment, Expense, Student } from "@/lib/store";
 
@@ -12,11 +12,23 @@ export default function FinancePage() {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
 
+    // Loading indicators
+    const [loading, setLoading] = useState(true);
+
     // Load Data
+    const refreshData = async () => {
+        setLoading(true);
+        const p = await Store.getPayments();
+        const e = await Store.getExpenses();
+        const s = await Store.getStudents();
+        setPayments(p);
+        setExpenses(e);
+        setStudents(s);
+        setLoading(false);
+    };
+
     useEffect(() => {
-        setPayments(Store.getPayments());
-        setExpenses(Store.getExpenses());
-        setStudents(Store.getStudents());
+        refreshData();
     }, []);
 
     // Modals
@@ -41,74 +53,55 @@ export default function FinancePage() {
         group: "",
     });
 
-    const refreshData = () => {
-        setPayments(Store.getPayments());
-        setExpenses(Store.getExpenses());
-    };
-
     // Handlers
-    const handleAddExpense = (e: React.FormEvent) => {
+    const handleAddExpense = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newExpense: Expense = {
-            id: Date.now(),
+        await Store.addExpense({
             title: expenseData.title,
             amount: parseInt(expenseData.amount) || 0,
             category: expenseData.category as any,
             date: expenseData.date,
-        };
-
-        const currentExpenses = Store.getExpenses();
-        const updatedExpenses = [newExpense, ...currentExpenses]; // Add to top
-        Store.saveExpenses(updatedExpenses);
+        });
 
         setIsExpenseModalOpen(false);
         setExpenseData({ title: "", amount: "", category: "other", date: new Date().toISOString().split('T')[0] });
         refreshData();
     };
 
-    const handleAddIncome = (e: React.FormEvent) => {
+    const handleAddIncome = async (e: React.FormEvent) => {
         e.preventDefault();
         // Finding student to get name
         const student = students.find(s => s.id.toString() === incomeData.studentId);
 
-        const newPayment: Payment = {
-            id: Date.now(),
+        await Store.addPayment({
             studentName: student ? `${student.firstName} ${student.lastName}` : "Noma'lum",
-            course: incomeData.course || student?.group || "Umumiy", // Agar o'quvchi tanlansa, guruhini olamiz
+            course: incomeData.course || student?.group || "Umumiy",
             group: incomeData.group || student?.group || "",
             amount: parseInt(incomeData.amount) || 0,
             date: incomeData.date,
             status: "paid", // Direct income is considered paid
             comment: incomeData.comment || "To'g'ridan-to'g'ri kirim",
-        };
-
-        const currentPayments = Store.getPayments();
-        const updatedPayments = [newPayment, ...currentPayments];
-        Store.savePayments(updatedPayments);
+        });
 
         setIsIncomeModalOpen(false);
         setIncomeData({ studentId: "", amount: "", date: new Date().toISOString().split('T')[0], comment: "", course: "", group: "" });
         refreshData();
     };
 
-    const handleDeleteExpense = (id: number) => {
+    const handleDeleteExpense = async (id: number) => {
         if (confirm("Xarajatni o'chirmoqchimisiz?")) {
-            const updated = expenses.filter(e => e.id !== id);
-            Store.saveExpenses(updated);
+            await Store.deleteExpense(id);
             refreshData();
         }
     };
 
-    const handleDeletePayment = (id: number) => {
+    const handleDeletePayment = async (id: number) => {
         if (confirm("To'lovni o'chirmoqchimisiz?")) {
-            const updated = payments.filter(p => p.id !== id);
-            Store.savePayments(updated);
+            await Store.deletePayment(id);
             refreshData();
         }
     };
 
-    // Calculate totals based on ALL time for simplicity in "Moliya" overview, 
-    // or we can add filters later. For now showing full lists.
     const paidPayments = payments.filter(p => p.status === "paid");
     const totalIncome = paidPayments.reduce((acc, curr) => acc + curr.amount, 0);
     const totalExpense = expenses.reduce((acc, curr) => acc + curr.amount, 0);
@@ -119,7 +112,7 @@ export default function FinancePage() {
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Moliya</h2>
                     <p className="text-muted-foreground">
-                        Kirim va chiqimlar nazorati.
+                        Kirim va chiqimlar nazorati (Cloud DB).
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -147,7 +140,7 @@ export default function FinancePage() {
                     </div>
                     <div className="pt-4">
                         <div className="text-2xl font-bold text-green-600">
-                            +{totalIncome.toLocaleString()} UZS
+                            {loading ? "..." : `+${totalIncome.toLocaleString()} UZS`}
                         </div>
                     </div>
                 </div>
@@ -158,7 +151,7 @@ export default function FinancePage() {
                     </div>
                     <div className="pt-4">
                         <div className="text-2xl font-bold text-red-600">
-                            -{totalExpense.toLocaleString()} UZS
+                            {loading ? "..." : `-${totalExpense.toLocaleString()} UZS`}
                         </div>
                     </div>
                 </div>
@@ -208,41 +201,45 @@ export default function FinancePage() {
                             </tr>
                         </thead>
                         <tbody className="[&_tr:last-child]:border-0">
-                            {activeTab === "income" ? (
-                                paidPayments.length === 0 ? (
-                                    <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Kirimlar topilmadi</td></tr>
-                                ) : (
-                                    paidPayments.map((p) => (
-                                        <tr key={p.id} className="border-b transition-colors hover:bg-muted/50">
-                                            <td className="p-4 align-middle">{p.date}</td>
-                                            <td className="p-4 align-middle font-medium">{p.studentName}</td>
-                                            <td className="p-4 align-middle text-muted-foreground">{p.group}</td>
-                                            <td className="p-4 align-middle text-right text-green-600 font-medium">+{p.amount.toLocaleString()} UZS</td>
-                                            <td className="p-4 align-middle text-right">
-                                                <button onClick={() => handleDeletePayment(p.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )
+                            {loading ? (
+                                <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Yuklanmoqda...</td></tr>
                             ) : (
-                                expenses.length === 0 ? (
-                                    <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Xarajatlar topilmadi</td></tr>
+                                activeTab === "income" ? (
+                                    paidPayments.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Kirimlar topilmadi</td></tr>
+                                    ) : (
+                                        paidPayments.map((p) => (
+                                            <tr key={p.id} className="border-b transition-colors hover:bg-muted/50">
+                                                <td className="p-4 align-middle">{p.date}</td>
+                                                <td className="p-4 align-middle font-medium">{p.studentName}</td>
+                                                <td className="p-4 align-middle text-muted-foreground">{p.group}</td>
+                                                <td className="p-4 align-middle text-right text-green-600 font-medium">+{p.amount.toLocaleString()} UZS</td>
+                                                <td className="p-4 align-middle text-right">
+                                                    <button onClick={() => handleDeletePayment(p.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )
                                 ) : (
-                                    expenses.map((e) => (
-                                        <tr key={e.id} className="border-b transition-colors hover:bg-muted/50">
-                                            <td className="p-4 align-middle">{e.date}</td>
-                                            <td className="p-4 align-middle font-medium">{e.title}</td>
-                                            <td className="p-4 align-middle text-muted-foreground">
-                                                <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                                                    {e.category}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 align-middle text-right text-red-600 font-medium">-{e.amount.toLocaleString()} UZS</td>
-                                            <td className="p-4 align-middle text-right">
-                                                <button onClick={() => handleDeleteExpense(e.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
-                                            </td>
-                                        </tr>
-                                    ))
+                                    expenses.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-4 text-center text-muted-foreground">Xarajatlar topilmadi</td></tr>
+                                    ) : (
+                                        expenses.map((e) => (
+                                            <tr key={e.id} className="border-b transition-colors hover:bg-muted/50">
+                                                <td className="p-4 align-middle">{e.date}</td>
+                                                <td className="p-4 align-middle font-medium">{e.title}</td>
+                                                <td className="p-4 align-middle text-muted-foreground">
+                                                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                                                        {e.category}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 align-middle text-right text-red-600 font-medium">-{e.amount.toLocaleString()} UZS</td>
+                                                <td className="p-4 align-middle text-right">
+                                                    <button onClick={() => handleDeleteExpense(e.id)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 className="h-4 w-4" /></button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )
                                 )
                             )}
                         </tbody>
@@ -306,7 +303,7 @@ export default function FinancePage() {
                 </div>
             )}
 
-            {/* Expense Modal (from Dashboard) */}
+            {/* Expense Modal */}
             {isExpenseModalOpen && (
                 <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-zinc-950 border rounded-xl shadow-lg w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
@@ -357,19 +354,8 @@ export default function FinancePage() {
                                 />
                             </div>
                             <div className="flex justify-end gap-2 mt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsExpenseModalOpen(false)}
-                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
-                                >
-                                    Bekor qilish
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-red-600 text-white shadow hover:bg-red-700 h-9 px-4 py-2"
-                                >
-                                    Qo'shish
-                                </button>
+                                <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="px-4 py-2 border rounded text-sm">Bekor qilish</button>
+                                <button type="submit" className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700">Qo'shish</button>
                             </div>
                         </form>
                     </div>

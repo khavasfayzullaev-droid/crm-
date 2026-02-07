@@ -1,4 +1,4 @@
-"use client";
+import { supabase } from './supabase';
 
 // Types
 export interface Group {
@@ -42,8 +42,8 @@ export interface Payment {
     course: string;
     group: string;
     amount: number;
-    date: string;       // To'lov qilingan sana yoki to'lov muddati
-    nextPaymentDate?: string; // Keyingi to'lov muddati
+    date: string;
+    nextPaymentDate?: string;
     status: "paid" | "unpaid";
     comment?: string;
 }
@@ -57,116 +57,234 @@ export interface Expense {
     comment?: string;
 }
 
-// Initial Mock Data
-// Can be empty for production logic, but keeping types safe
-const initialGroups: Group[] = [];
-const initialStudents: Student[] = [];
-const initialTeachers: Teacher[] = [];
-const initialPayments: Payment[] = [];
-const initialExpenses: Expense[] = [];
-
-// Helper to simulate a simple database using LocalStorage
 class Store {
-    private static GROUPS_KEY = "crm_groups";
-    private static STUDENTS_KEY = "crm_students";
-    private static TEACHERS_KEY = "crm_teachers";
-    private static PAYMENTS_KEY = "crm_payments";
-    private static EXPENSES_KEY = "crm_expenses";
-
-    // Groups
-    static getGroups(): Group[] {
-        if (typeof window === "undefined") return initialGroups;
-        const stored = localStorage.getItem(this.GROUPS_KEY);
-        if (!stored) {
-            localStorage.setItem(this.GROUPS_KEY, JSON.stringify(initialGroups));
-            return initialGroups;
-        }
-        return JSON.parse(stored);
+    // --- GROUPS ---
+    static async getGroups(): Promise<Group[]> {
+        const { data, error } = await supabase.from('groups').select('*').order('id', { ascending: false });
+        if (error) { console.error('Error fetching groups:', error); return []; }
+        return data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            course: item.course,
+            days: item.days,
+            time: item.time,
+            studentCount: item.student_count,
+            status: item.status
+        }));
     }
 
-    static saveGroups(groups: Group[]) {
-        if (typeof window === "undefined") return;
-        localStorage.setItem(this.GROUPS_KEY, JSON.stringify(groups));
+    static async addGroup(group: Omit<Group, 'id'>): Promise<Group | null> {
+        const { data, error } = await supabase.from('groups').insert([{
+            name: group.name,
+            course: group.course,
+            days: group.days,
+            time: group.time,
+            student_count: group.studentCount,
+            status: group.status
+        }]).select().single();
+        if (error) { console.error('Error adding group:', error); return null; }
+        return { ...group, id: data.id };
     }
 
-    // Students
-    static getStudents(): Student[] {
-        if (typeof window === "undefined") return initialStudents;
-        const stored = localStorage.getItem(this.STUDENTS_KEY);
-        if (!stored) {
-            localStorage.setItem(this.STUDENTS_KEY, JSON.stringify(initialStudents));
-            return initialStudents;
-        }
-        return JSON.parse(stored);
+    static async updateGroup(group: Group): Promise<boolean> {
+        const { error } = await supabase.from('groups').update({
+            name: group.name,
+            course: group.course,
+            days: group.days,
+            time: group.time,
+            student_count: group.studentCount,
+            status: group.status
+        }).eq('id', group.id);
+        if (error) { console.error('Error updating group:', error); return false; }
+        return true;
     }
 
-    static saveStudents(students: Student[]) {
-        if (typeof window === "undefined") return;
-        localStorage.setItem(this.STUDENTS_KEY, JSON.stringify(students));
+    static async deleteGroup(id: number): Promise<boolean> {
+        const { error } = await supabase.from('groups').delete().eq('id', id);
+        if (error) { console.error('Error deleting group:', error); return false; }
+        return true;
     }
 
-    // Teachers
-    static getTeachers(): Teacher[] {
-        if (typeof window === "undefined") return initialTeachers;
-        const stored = localStorage.getItem(this.TEACHERS_KEY);
-        if (!stored) {
-            localStorage.setItem(this.TEACHERS_KEY, JSON.stringify(initialTeachers));
-            return initialTeachers;
-        }
-        return JSON.parse(stored);
+    // --- STUDENTS ---
+    static async getStudents(): Promise<Student[]> {
+        const { data, error } = await supabase.from('students').select('*').order('id', { ascending: false });
+        if (error) { console.error('Error fetching students:', error); return []; }
+        return data.map((item: any) => ({
+            id: item.id,
+            firstName: item.first_name,
+            lastName: item.last_name,
+            phone: item.phone,
+            age: item.age,
+            source: item.source,
+            gender: item.gender,
+            joinDate: item.join_date,
+            parentName: item.parent_name,
+            parentPhone: item.parent_phone,
+            group: item.group_name,
+            paymentAmount: item.payment_amount,
+            comment: item.comment || ""
+        }));
     }
 
-    static saveTeachers(teachers: Teacher[]) {
-        if (typeof window === "undefined") return;
-        localStorage.setItem(this.TEACHERS_KEY, JSON.stringify(teachers));
+    static async addStudent(student: Omit<Student, 'id'>): Promise<Student | null> {
+        const { data, error } = await supabase.from('students').insert([{
+            first_name: student.firstName,
+            last_name: student.lastName,
+            phone: student.phone,
+            age: student.age,
+            source: student.source,
+            gender: student.gender,
+            join_date: student.joinDate,
+            parent_name: student.parentName,
+            parent_phone: student.parentPhone,
+            group_name: student.group,
+            payment_amount: student.paymentAmount,
+            comment: student.comment
+        }]).select().single();
+        if (error) { console.error('Error adding student:', error); return null; }
+        return { ...student, id: data.id };
     }
 
-    // Payments
-    static getPayments(): Payment[] {
-        if (typeof window === "undefined") return initialPayments;
-        const stored = localStorage.getItem(this.PAYMENTS_KEY);
-
-        let payments: Payment[] = [];
-        if (!stored) {
-            localStorage.setItem(this.PAYMENTS_KEY, JSON.stringify(initialPayments));
-            payments = initialPayments;
-        } else {
-            payments = JSON.parse(stored);
-        }
-
-        // Auto-cleanup: Remove payments linked to deleted students
-        const students = this.getStudents();
-        const studentNames = new Set(students.map(s => `${s.firstName} ${s.lastName}`));
-
-        const validPayments = payments.filter(p => studentNames.has(p.studentName));
-
-        if (validPayments.length !== payments.length) {
-            this.savePayments(validPayments);
-            return validPayments;
-        }
-
-        return payments;
+    static async updateStudent(student: Student): Promise<boolean> {
+        const { error } = await supabase.from('students').update({
+            first_name: student.firstName,
+            last_name: student.lastName,
+            phone: student.phone,
+            age: student.age,
+            source: student.source,
+            gender: student.gender,
+            join_date: student.joinDate,
+            parent_name: student.parentName,
+            parent_phone: student.parentPhone,
+            group_name: student.group,
+            payment_amount: student.paymentAmount,
+            comment: student.comment
+        }).eq('id', student.id);
+        if (error) { console.error('Error updating student:', error); return false; }
+        return true;
     }
 
-    static savePayments(payments: Payment[]) {
-        if (typeof window === "undefined") return;
-        localStorage.setItem(this.PAYMENTS_KEY, JSON.stringify(payments));
+    static async deleteStudent(id: number): Promise<boolean> {
+        const { error } = await supabase.from('students').delete().eq('id', id);
+        if (error) { console.error('Error deleting student:', error); return false; }
+        return true;
     }
 
-    // Expenses
-    static getExpenses(): Expense[] {
-        if (typeof window === "undefined") return initialExpenses;
-        const stored = localStorage.getItem(this.EXPENSES_KEY);
-        if (!stored) {
-            localStorage.setItem(this.EXPENSES_KEY, JSON.stringify(initialExpenses));
-            return initialExpenses;
-        }
-        return JSON.parse(stored);
+    // --- TEACHERS ---
+    static async getTeachers(): Promise<Teacher[]> {
+        const { data, error } = await supabase.from('teachers').select('*').order('id', { ascending: false });
+        if (error) { console.error('Error fetching teachers:', error); return []; }
+        return data.map((item: any) => ({
+            id: item.id,
+            firstName: item.first_name,
+            lastName: item.last_name,
+            phone: item.phone,
+            age: item.age,
+            startDate: item.start_date
+        }));
     }
 
-    static saveExpenses(expenses: Expense[]) {
-        if (typeof window === "undefined") return;
-        localStorage.setItem(this.EXPENSES_KEY, JSON.stringify(expenses));
+    static async addTeacher(teacher: Omit<Teacher, 'id'>): Promise<Teacher | null> {
+        const { data, error } = await supabase.from('teachers').insert([{
+            first_name: teacher.firstName,
+            last_name: teacher.lastName,
+            phone: teacher.phone,
+            age: teacher.age,
+            start_date: teacher.startDate
+        }]).select().single();
+        if (error) { console.error('Error adding teacher:', error); return null; }
+        return { ...teacher, id: data.id };
+    }
+
+    static async deleteTeacher(id: number): Promise<boolean> {
+        const { error } = await supabase.from('teachers').delete().eq('id', id);
+        if (error) { console.error('Error deleting teacher:', error); return false; }
+        return true;
+    }
+
+    // --- PAYMENTS ---
+    static async getPayments(): Promise<Payment[]> {
+        const { data, error } = await supabase.from('payments').select('*').order('date', { ascending: false });
+        if (error) { console.error('Error fetching payments:', error); return []; }
+        return data.map((item: any) => ({
+            id: item.id,
+            studentName: item.student_name,
+            course: item.course,
+            group: item.group_name,
+            amount: item.amount,
+            date: item.date,
+            nextPaymentDate: item.next_payment_date,
+            status: item.status,
+            comment: item.comment
+        }));
+    }
+
+    static async addPayment(payment: Omit<Payment, 'id'>): Promise<Payment | null> {
+        const { data, error } = await supabase.from('payments').insert([{
+            student_name: payment.studentName,
+            course: payment.course,
+            group_name: payment.group,
+            amount: payment.amount,
+            date: payment.date,
+            next_payment_date: payment.nextPaymentDate,
+            status: payment.status,
+            comment: payment.comment
+        }]).select().single();
+        if (error) { console.error('Error adding payment:', error); return null; }
+        return { ...payment, id: data.id };
+    }
+
+    static async updatePayment(payment: Payment): Promise<boolean> {
+        const { error } = await supabase.from('payments').update({
+            student_name: payment.studentName,
+            course: payment.course,
+            group_name: payment.group,
+            amount: payment.amount,
+            date: payment.date,
+            next_payment_date: payment.nextPaymentDate,
+            status: payment.status,
+            comment: payment.comment
+        }).eq('id', payment.id);
+        if (error) { console.error('Error updating payment:', error); return false; }
+        return true;
+    }
+
+    static async deletePayment(id: number): Promise<boolean> {
+        const { error } = await supabase.from('payments').delete().eq('id', id);
+        if (error) { console.error('Error deleting payment:', error); return false; }
+        return true;
+    }
+
+    // --- EXPENSES ---
+    static async getExpenses(): Promise<Expense[]> {
+        const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+        if (error) { console.error('Error fetching expenses:', error); return []; }
+        return data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            amount: item.amount,
+            date: item.date,
+            category: item.category,
+            comment: item.comment
+        }));
+    }
+
+    static async addExpense(expense: Omit<Expense, 'id'>): Promise<Expense | null> {
+        const { data, error } = await supabase.from('expenses').insert([{
+            title: expense.title,
+            amount: expense.amount,
+            date: expense.date,
+            category: expense.category,
+            comment: expense.comment
+        }]).select().single();
+        if (error) { console.error('Error adding expense:', error); return null; }
+        return { ...expense, id: data.id };
+    }
+
+    static async deleteExpense(id: number): Promise<boolean> {
+        const { error } = await supabase.from('expenses').delete().eq('id', id);
+        if (error) { console.error('Error deleting expense:', error); return false; }
+        return true;
     }
 }
 
