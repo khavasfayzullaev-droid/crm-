@@ -45,9 +45,9 @@ export default function Dashboard() {
         <MainLayout>
             <div className="mb-8 flex justify-between items-center">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+                    <h2 className="text-3xl font-bold tracking-tight">CRM Dashboard <span className="text-blue-500 text-lg align-top font-mono bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-md ml-2 border border-blue-200 dark:border-blue-800">✅ Cloud Active</span></h2>
                     <p className="text-muted-foreground">
-                        O'quv markazi faoliyati bo'yicha umumiy ma'lumotlar.
+                        Hamma ma'lumotlar xavfsiz Bulutli Bazada saqlanmoqda.
                     </p>
                 </div>
             </div>
