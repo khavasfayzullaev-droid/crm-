@@ -90,7 +90,7 @@ export default function SystemStatusPage() {
                                 <h3 className="text-sm font-semibold text-green-800 dark:text-green-300">Oxirgi O'zgarish (Sync Test):</h3>
                                 <p className="text-xl font-bold text-green-600">{counts.latest}</p>
                                 <p className="text-xs text-muted-foreground">
-                                    Agar bu nom ikki qurilmada har xil bo'lsa -> "Refresh" qiling.
+                                    Agar bu nom ikki qurilmada har xil bo'lsa &rarr; "Refresh" qiling.
                                 </p>
                             </div>
                         </div>
