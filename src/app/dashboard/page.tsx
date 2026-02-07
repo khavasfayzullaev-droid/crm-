@@ -62,7 +62,7 @@ export default function Dashboard() {
                     <div className="p-6 pt-0">
                         <div className="text-2xl font-bold">{totalStudents}</div>
                         <p className="text-xs text-muted-foreground">
-                            Faol o'quvchilar soni
+                            Faol o'quvchilar soni <span className="text-[10px] text-blue-500 ml-1">(v2.0 Cloud)</span>
                         </p>
                     </div>
                 </div>
